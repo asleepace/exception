@@ -68,7 +68,12 @@ const getRelativePath = (fullPath: string) => {
 function getAllFrames(stack: string) {
   return stack
     .split('\n')
-    .filter((line) => line.includes('.ts:'))
+    .filter(
+      (line) =>
+        line.includes('.ts:') ||
+        line.includes('.js:') ||
+        (line.includes('/') && line.includes('.') && line.includes(':'))
+    )
     .map((line) => line.slice(line.indexOf('/')).trim().replace(')', ''))
     .map((line) => {
       const [filePath, lineNumber, column] = line.split(':')
@@ -168,8 +173,57 @@ export type MatchClause<T> = {
 export class Exception extends Error {
   static MAX_SCOPED_DEFS: number = 100
 
-  static from(other: Exception) {
-    return other
+  /**
+   * Cast anything into an instance of this Exception type.
+   */
+  static cast(obj: unknown): ExcpInstance {
+    // Already correct type - return as-is
+    if (this.is(obj)) return obj as ExcpInstance
+
+    // String
+    if (typeof obj === 'string') {
+      return new this(obj) as ExcpInstance
+    }
+
+    // Native Error or Exception - pass message and error separately
+    if (obj instanceof Error) {
+      const instance = new this(obj.message) as ExcpInstance
+      // Manually set cause since constructor's getPossibleCause needs it in args
+      Object.defineProperty(instance, 'cause', {
+        value: obj,
+        enumerable: false,
+      })
+      return instance
+    }
+
+    // Object with message property
+    if (obj && typeof obj === 'object' && 'message' in obj) {
+      return new this(String(obj.message)) as ExcpInstance
+    }
+
+    // Primitives or anything else
+    return new this(obj) as ExcpInstance
+  }
+
+  /**
+   * Create a new instance identical to the other instance.
+   */
+  static from(
+    other: ExcpInstance | ReturnType<ExcpInstance['toObject']>
+  ): ExcpInstance {
+    const data = other instanceof Exception ? other.toObject() : other
+
+    // Pass cause as second arg so getPossibleCause can find it
+    const instance = data.cause
+      ? new this(data.rawMessage, data.cause)
+      : new this(data.rawMessage)
+
+    // Preserve stack trace
+    if (data.stack) {
+      instance.stack = data.stack
+    }
+
+    return instance
   }
 
   static enum<Keys extends string[] = string[]>(
@@ -216,9 +270,13 @@ export class Exception extends Error {
     return getStackInfo(this.stack)?.fileName
   }
 
+  protected get ctor() {
+    return this.constructor as typeof Exception
+  }
+
   constructor(...args: any[]) {
     super(safeEncode(...args), {
-      cause: getPossibleCause(args),
+      cause: getPossibleCause(...args),
     })
   }
 
@@ -246,5 +304,31 @@ export class Exception extends Error {
     }
     console.log(entries) // NOTE: keep this here!
     return this
+  }
+
+  /**
+   * Creates an identical copy of this instance.
+   */
+  public clone(): this {
+    return this.ctor.from(this) as this
+  }
+
+  public toObject() {
+    // Extract raw message (without label/name prefix)
+    const rawMessage = this.message
+      .replace(/^\[.*?\]\s+/, '') // Remove [label]
+      .replace(/^[A-Za-z0-9_]+:\s*/, '') // Remove Name: (handles Error404, etc)
+      .trim()
+
+    return {
+      name: this.name,
+      message: this.message,
+      rawMessage: rawMessage,
+      label: this.label,
+      scopeIndex: this.scopeIndex,
+      stack: this.stack,
+      cause: this.cause,
+      fileName: this.fileName,
+    }
   }
 }

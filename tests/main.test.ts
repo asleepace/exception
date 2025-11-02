@@ -1,5 +1,5 @@
 import { describe, it, test, expect } from 'bun:test'
-import { Exception } from '@/index'
+import { Exception } from '@/exception'
 
 // ================================================================================
 //  Basic
