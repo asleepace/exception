@@ -1,13 +1,11 @@
 export type ExcpClass = typeof Exception
 export type ExcpInstance = InstanceType<ExcpClass>
 
-const getScopedKey = (scope: string, excepName: string) => {
-  return [...new Set(`${scope}:${excepName}`.split(':'))].join(':')
-}
+/** extract first error or exception instance if provided in args. */
+const getPossibleCause = (...args: any[]): Error =>
+  args.find((item) => item instanceof Error || item instanceof Exception)
 
-const pluckFirstError = (...args: any[]) =>
-  args.find((item) => item instanceof Error)
-
+/** parse useful information from the stack trace. */
 const getStackInfo = (stack?: string) => {
   if (!stack) return undefined
   const lastOpenParenthesis = stack.lastIndexOf('(')
@@ -27,6 +25,7 @@ const getStackInfo = (stack?: string) => {
   }
 }
 
+/** helper for safely encode an array of possible objects to a string. */
 function safeEncode(...args: any[]): string {
   try {
     return args
@@ -41,24 +40,72 @@ function safeEncode(...args: any[]): string {
   }
 }
 
+const globalDefinitions = new Map<string, Map<string, ExcpClass>>()
+
+const getScopedDefinitions = (scope: string) => {
+  if (!globalDefinitions.has(scope)) {
+    globalDefinitions.set(scope, new Map())
+  }
+  return globalDefinitions.get(scope)!
+}
+
+const getRelativePath = (fullPath: string) => {
+  const parts1 = String(import.meta.dirname)
+    .split('/')
+    .map((part) => part.trim())
+  const parts2 = fullPath.split('/')
+
+  // Find common prefix
+  let i = 0
+  while (i < parts1.length && i < parts2.length && parts1[i] === parts2[i]) {
+    i++
+  }
+
+  // Return the unique part
+  return parts2.slice(i).join('/')
+}
+
+function getAllFrames(stack: string) {
+  return stack
+    .split('\n')
+    .filter((line) => line.includes('.ts:'))
+    .map((line) => line.slice(line.indexOf('/')).trim().replace(')', ''))
+    .map((line) => {
+      const [filePath, lineNumber, column] = line.split(':')
+      return {
+        filePath,
+        relativePath: getRelativePath(filePath),
+        lineNumber,
+        column,
+      }
+    })
+}
+
+// ======================= define =======================
+
 export function defineScopedExcption(options: {
-  scope: string
   errorName: string
-}) {
+  labelName?: string | undefined
+}): ExcpClass {
+  const dummy = new Exception()
+
   /**
-   * Unique key which is used to register errors.
+   * Use the call site as the scope location.
    */
-  const KEY = getScopedKey(options.scope, options.errorName)
+  const stackFrames = getAllFrames(dummy.stack ?? '')
+  const lastStackFrame = stackFrames.pop()
 
-  // Return existing if already defined
-  const existing = Exception.forKey(KEY)
-  if (existing) return existing
+  const scopeName = lastStackFrame?.relativePath ?? 'global'
+  const labeledScopeName = options.labelName
+    ? [options.labelName, scopeName].join(':')
+    : scopeName
 
-  // Calculate scopeIndex BEFORE creating the class
-  const scopedErrors = Exception.keys().filter((key) =>
-    key.startsWith(options.scope)
-  )
-  const nextIndex = scopedErrors.length + 1
+  const scope = getScopedDefinitions(labeledScopeName)
+
+  if (scope.has(options.errorName)) {
+    console.warn('error already exists in scope!')
+    return scope.get(options.errorName)!
+  }
 
   /**
    * ## Scoped Exception
@@ -67,13 +114,7 @@ export function defineScopedExcption(options: {
    * the provided exception.
    */
   class ScopedException extends Exception {
-    /**
-     * Unique identifier which is used to filter definitions.
-     */
-    static override key: string = KEY
-    static override scope: string = options.scope
-    static override scopeIndex: number = nextIndex // Assign unique index
-
+    static scopedIndex: number = scope.size
     static override is(
       obj: unknown
     ): obj is InstanceType<typeof ScopedException> {
@@ -86,10 +127,11 @@ export function defineScopedExcption(options: {
 
     // instance properties ...
 
-    public override name: string = options.errorName
-    public override scope: string = options.scope
-    public override get scopeIndex() {
-      return nextIndex
+    public override name: string = options.errorName // NOTE: don't use label here
+    public override scopeIndex = ScopedException.scopedIndex
+
+    public override get label(): string | undefined {
+      return options.labelName
     }
 
     constructor(...args: any[]) {
@@ -98,15 +140,20 @@ export function defineScopedExcption(options: {
       // TestError (code: 2)
       // TestError (code: 2): A message.
       const components: string[] = []
-      this.scope !== 'global' && components.push(`[${this.scope}] `)
+
+      if (this.label) {
+        components.push(`[${this.label}] `)
+      }
+
       components.push(this.name)
+
       this.message && components.push(`: ${this.message}`)
       // NOTE: Important to set the message here.
       this.message = components.join('')
     }
   }
-  // NOTE: make sure to add definition to global registry
-  Exception.globalRegistry.add(ScopedException)
+
+  scope.set(options.errorName, ScopedException)
   return ScopedException
 }
 
@@ -119,66 +166,25 @@ export type MatchClause<T> = {
  * Base exception class which all other errors inherit from.
  */
 export class Exception extends Error {
-  static readonly MAX_SCOPED_DEFS: number = 100
-  static readonly key: string = getScopedKey('global', Exception.name)
-  static readonly scope: string = 'global'
-  static readonly scopeIndex: number = 0 // Add static scopeIndex
+  static MAX_SCOPED_DEFS: number = 100
 
   static from(other: Exception) {
     return other
   }
 
-  static enum<Keys extends string[] = string[]>(options = { scope: 'global' }) {
+  static enum<Keys extends string[] = string[]>(
+    options: { label?: string } = {}
+  ) {
     return new Proxy([], {
       get: (target, errorName) => {
-        /**
-         * Handle special properties here...
-         */
+        /** Handle special properties here... */
         if (typeof errorName === 'symbol') return target[errorName as any]
         if (errorName === 'length') return Exception.MAX_SCOPED_DEFS
-        return defineScopedExcption({
-          scope: options.scope ?? 'global',
-          errorName,
-        })
+        /** Otherwise return a new error definition. */
+        return defineScopedExcption({ errorName, labelName: options.label })
       },
     }) as unknown as { [K in Keys[number]]: ExcpClass }
   }
-
-  /**
-   * Global scope which contains all error definitions.
-   */
-  static readonly globalRegistry = new Set<ExcpClass>()
-
-  static keys(): string[] {
-    return Array.from(this.globalRegistry).map((excp) => excp.key)
-  }
-
-  static forKey(key: string): ExcpClass | undefined {
-    const entries = Array.from(this.globalRegistry)
-    return entries.find((excp) => excp.key === key)
-  }
-
-  /**
-   * Check if given argument is an instance of this class and either
-   * perform one of the following:
-   *
-   * ```ts
-   * const example1: boolean = Exception.match(e)
-   * const example2: number = Exception.match(e, () => 123)
-   * const example3: string = Exception.natch(e, (err) => err.message)
-   * ```
-   */
-  // public static match<T>(e: unknown): e is ExcpInstance
-  // public static match<T>(e: unknown, fn: (err: ExcpInstance) => T): T | void
-  // public static match<T>(e: unknown, fn?: (err: ExcpInstance) => T): any {
-  //   const isInstanceType = e instanceof this
-  //   if (typeof fn === 'function') {
-  //     if (!isInstanceType) return false
-  //     return fn(e)
-  //   } else {
-  //     return isInstanceType
-  //   }
-  // }
 
   /**
    * Check if the provided object is an instance of this class.
@@ -194,28 +200,35 @@ export class Exception extends Error {
     throw this.new(...args)
   }
 
+  /**
+   * Shorthand for creating a new instance (does not throw).
+   */
   public static new(...args: any[]): Exception {
     return new this(...args)
   }
 
   public override readonly name: string = 'Exception'
-  public readonly scope: string = 'global'
-  public get scopeIndex(): number {
-    return (this.constructor as typeof Exception).scopeIndex
+  public scopeIndex: number = 0
+  public get label(): string | undefined {
+    return undefined
+  }
+  public get fileName(): string | undefined {
+    return getStackInfo(this.stack)?.fileName
   }
 
   constructor(...args: any[]) {
     super(safeEncode(...args), {
-      cause: pluckFirstError(args),
+      cause: getPossibleCause(args),
     })
   }
 
+  /**
+   * Helper for quickly inspecting error contents.
+   */
   public debug({ verbose = false } = {}): this {
     const entries: Record<string, any> = {
       name: this.name,
       message: this.message,
-      scope: this.scope,
-      scopeIndex: this.scopeIndex,
     }
 
     const stackInfo = getStackInfo(this.stack)
@@ -234,27 +247,4 @@ export class Exception extends Error {
     console.log(entries) // NOTE: keep this here!
     return this
   }
-}
-
-export const Excp = Exception
-
-/**
- * Exception namespace.
- */
-export const err = {
-  Exception,
-  enum: Exception.enum,
-  match<T extends ExcpClass>(e: unknown) {
-    const clauses = [] as T[]
-    const builder = {
-      clauses: [] as T[],
-      where(excp: T) {
-        this.clauses.push(excp)
-        return this
-      },
-      value<G>(defaultValue?: G) {
-        return this.clauses.some((excp) => excp.is(e)) ?? defaultValue
-      },
-    }
-  },
 }

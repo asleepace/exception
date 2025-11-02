@@ -1,25 +1,79 @@
-interface Scope<T, Keys extends string = string> {
+export interface Scope<T, Keys extends string = string> {
+  name: string
   data: Record<Keys, T>
   children: Scope<T>[]
+  parent: Scope<T> | null
   readonly keys: Keys[]
   readonly size: number
+  readonly path: string
   set<K extends string>(key: K, value: T): Scope<T, Keys | K>
   get<K extends Keys>(key: K): T
   get(key: string): T | undefined
   has<K extends string>(key: K): this is Scope<T, K | Keys>
   [Symbol.iterator](): IterableIterator<T>
-  subscope(): Scope<T>
+  subscope(scopeName: string): Scope<T>
+  find(scopeName: string): Scope<T> | undefined
+  with(scopeName: string): Scope<T>
+  tree(): IterableIterator<Scope<T>>
+  print(): void
 }
 
-const createScope = <T, Keys extends string = never>(): Scope<T, Keys> => {
+/**
+ * A type-safe map like container which improved type safety and
+ * support for children.
+ */
+export const createScope = <T, Keys extends string = never>(
+  name: string
+): Scope<T, Keys> => {
   const scope: Scope<T, Keys> = {
+    name,
     data: {} as Record<Keys, T>,
     children: [],
+    parent: null,
 
-    subscope() {
-      const child = createScope<T>()
+    get path() {
+      if (!this.parent) return this.name
+      return `${this.parent.path}/${this.name}`
+    },
+
+    print() {
+      console.log([...this.tree()].map((item) => item.path))
+    },
+
+    subscope(scopeName: string) {
+      const child = createScope<T>(scopeName)
       this.children.push(child)
+      child.parent = this
       return child
+    },
+
+    with(scopePath: string): Scope<T> {
+      const existing = this.find(scopePath)
+      if (existing) return existing
+
+      // Handle nested paths like 'api:v1:users'
+      const parts = scopePath.split('/')
+      let current: Scope<T> = this
+
+      for (const part of parts) {
+        const found = current.children.find((c) => c.name === part)
+        if (found) {
+          current = found
+        } else {
+          current = current.subscope(part)
+        }
+      }
+
+      return current
+    },
+
+    find(scopePath: string): Scope<T> | undefined {
+      for (const scope of this.tree()) {
+        if (scope.path === scopePath) {
+          return scope
+        }
+      }
+      return undefined
     },
 
     get keys() {
@@ -43,6 +97,13 @@ const createScope = <T, Keys extends string = never>(): Scope<T, Keys> => {
       return this as any as Scope<T, Keys | K>
     },
 
+    *tree(): IterableIterator<Scope<T>> {
+      yield this
+      for (const child of this.children) {
+        yield* child.tree()
+      }
+    },
+
     *[Symbol.iterator](): IterableIterator<T> {
       yield* Object.values<T>(this.data)
       for (const child of this.children) {
@@ -53,23 +114,3 @@ const createScope = <T, Keys extends string = never>(): Scope<T, Keys> => {
 
   return scope
 }
-
-// Usage
-const globalScope = createScope<number>()
-
-const s1 = globalScope.set('age', 123)
-const s2 = s1.set('count', 456)
-
-if (s2.has('age')) {
-  const age: number = s2.data.age // ✅ Typed!
-}
-
-// Also works with type narrowing
-if (s2.has('missing')) {
-  const x = s2.data.missing // Only reachable if 'missing' exists
-}
-
-const childScope = s2.subscope()
-childScope.set('nested', 789)
-
-console.log(...s2) // 123, 456, 789
