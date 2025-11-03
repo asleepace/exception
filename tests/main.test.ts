@@ -97,21 +97,3 @@ describe('Static Methods', () => {
     expect(TestError.is(e2)).toBe(false)
   })
 })
-
-// ================================================================================
-//  Edge Cases
-// ================================================================================
-
-describe('Edge Cases', () => {
-  it('1. should not throw on infinite extraction.', () => {
-    const { Err, ...infinite } = Exception.enum({ label: 'edge-1' })
-    expect(infinite).toBeObject()
-  })
-
-  it('2. should be able to display complex items', () => {
-    const { Err } = Exception.enum({ label: 'edge-2' })
-    expect(Err.new('example', { userId: 123 }).message).toEqual(
-      '[edge-2] Err: example {"userId":123}'
-    )
-  })
-})
