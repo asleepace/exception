@@ -1,6 +1,6 @@
 {
   "name": "@asleepace/exception",
-  "version": "0.1.0",
+  "version": "0.99.0",
   "description": "TS Error handling which sucks less.",
   "module": "src/index.ts",
   "type": "module",
