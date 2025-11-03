@@ -124,4 +124,6 @@ More docs coming soon, but time for sleep...
 
 ## Contributing
 
-https://github.com/asleepace/exception
+source code: https://github.com/asleepace/exception
+
+_It's a bad day to be an error..._
