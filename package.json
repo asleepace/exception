@@ -17,6 +17,7 @@
     "test": "bun test",
     "test:watch": "bun test --watch",
     "test:coverage": "bun test --coverage",
+    "types": "tsc --declaration --emitDeclarationOnly --outDir dist",
     "typecheck": "tsc --noEmit",
     "dev": "bun run src/index.ts",
     "lint": "tsc --noEmit && bun test"
