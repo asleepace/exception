@@ -1,5 +1,5 @@
-import { describe, it, test, expect } from 'bun:test'
-import { Exception } from '@/exception'
+import { describe, it, expect } from 'bun:test'
+import { Exception } from '@/index'
 
 // ================================================================================
 //  Basic
@@ -11,7 +11,9 @@ describe('Basic Usage', () => {
     const error = new BasicError('test message')
     expect(error).toBeInstanceOf(BasicError)
     expect(error).toBeInstanceOf(Exception)
-    expect(error.message).toBe('[basic-1] BasicError: test message (main.test.ts)')
+    expect(error.message).toBe(
+      '[basic-1] BasicError: test message (main.test.ts)'
+    )
   })
 
   it('2. should be able to define with scopes', () => {

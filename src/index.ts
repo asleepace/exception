@@ -48,7 +48,7 @@ const getScopedDefinitions = (scope: string) => {
 }
 
 /** extract first error or exception instance if provided in args. */
-const getPossibleCause = (...args: any[]): Error =>
+const getPossibleCause = (...args: any[]): Error | undefined =>
   args.find((item) => item instanceof Error || item instanceof Exception)
 
 /** parse useful information from the stack trace. */
