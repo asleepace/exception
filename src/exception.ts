@@ -303,6 +303,9 @@ export class Exception extends Error {
         if (matched) return matched.cast(e) as ExcpInstance
         return undefined
       },
+      *[Symbol.iterator]() {
+        yield* this.defs()
+      },
     }
 
     return new Proxy([], {
@@ -310,6 +313,7 @@ export class Exception extends Error {
         /** Handle special properties here... */
         if (typeof errorName === 'symbol') return target[errorName as any]
 
+        /** Return custom local scope property. */
         if (errorName === 'scope') return scope
 
         /** Since our proxy object is an array we should return the length. */
@@ -367,6 +371,12 @@ export class Exception extends Error {
     super(safeEncode(...args), {
       cause: getPossibleCause(...args),
     })
+  }
+
+  public transform<T>(
+    callback: (this: typeof this, excp: typeof this) => T
+  ): T {
+    return callback.call(this, this)
   }
 
   /**
