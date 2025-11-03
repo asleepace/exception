@@ -288,7 +288,7 @@ export class Exception extends Error {
   static enum<Keys extends string[] = string[]>(
     options: { label?: string } = {}
   ) {
-    const localScope = new Map<string, ExcpClass>()
+    const localScope = new Map<Keys[number], ExcpClass>()
 
     let scope = {
       label: options.label,
