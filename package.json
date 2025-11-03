@@ -1,6 +1,6 @@
 {
   "name": "@asleepace/exception",
-  "version": "0.99.2",
+  "version": "0.99.3",
   "description": "TS Error handling which sucks less.",
   "type": "module",
   "main": "./dist/index.js",

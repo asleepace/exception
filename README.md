@@ -18,6 +18,8 @@ this project aims to modernize the APIs and provide much needed quality of life 
 3. Allow passing multiple arguments as messages
 4. Easier debugging and formatting
 
+> **NOTE**: this package works best when tsconfig.json `"noUncheckedIndexedAccess": false` flag is disabled.
+
 ```ts
 import { Exception } from '@asleepace/exception'
 
@@ -32,6 +34,11 @@ const {
   scope,
 } = Exception.enum({ label: 'http' })
 
+// example #3: can also be used with strict names:
+const e = Exception.enum<['ErrorOne', 'ErrorTwo']>()
+e.ErrorOne.from('This works too!')
+
+// example usage:
 function example(request: Request) {
   try {
     throw NotFound(request.url)
@@ -41,6 +48,16 @@ function example(request: Request) {
     return NotFound.is(e)?.message ?? 'unknown error'
   }
 }
+```
+
+## Types
+
+If you have the `tsconfig.json` setting `"no"
+
+```ts
+const e = Exception.enum<['ErrorOne', 'ErrorTwo']>()
+
+e.ErrorOne.throw('This works too!')
 ```
 
 ## API
