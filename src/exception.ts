@@ -12,7 +12,7 @@ export type ExcpConf = {
 
 // ======================= globals =======================
 
-const globalConfig: ExcpConf = {
+let globalConfig: ExcpConf = {
   template: ['[$label] ', '$error', ': $message', ' ($file)'],
   maxScopedDefs: 100,
   encoding: 'json',
@@ -229,6 +229,10 @@ export function defineScopedExcption(options: {
  *
  */
 export class Exception extends Error {
+  static setGlobalConfig(config: Partial<ExcpConf>) {
+    globalConfig = { ...globalConfig, ...config }
+  }
+
   /**
    * Cast anything into an instance of this Exception type.
    */

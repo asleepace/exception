@@ -1,7 +1,7 @@
 {
-  "name": "@asleepace/errors",
-  "version": "0.1.0",
-  "description": "TS Error handling made easy.",
+  "name": "@asleepace/exception",
+  "version": "0.99.0",
+  "description": "TS Error handling which sucks less.",
   "module": "src/index.ts",
   "type": "module",
   "main": "src/index.ts",
@@ -29,9 +29,12 @@
     "@asleepace",
     "handling",
     "simple",
-    "type-safe"
+    "type-safe",
+    "moderm",
+    "functional",
+    "bun"
   ],
-  "author": "Colin",
+  "author": "Colin Teahan",
   "license": "MIT",
   "devDependencies": {
     "@types/bun": "latest",

@@ -83,3 +83,45 @@ const err: CustomError = CustomError.cast(new Error('normal error'))
 // instance method: `.into<T>(transformFn): T` convert exception instance into other data type.
 const out: string = new CustomError().into((err) => err.message)
 ```
+
+### 3. Snippets
+
+Below is a collection of cool snippets which demonstrate some nice use cases, check out the `./tests/` directory
+as well for more examples.
+
+```ts
+const { CatcherInTheRye } = Exception.enum({ label: 'snippets' })
+
+try {
+  // this is why we are stuck with the unknown type in catch....
+  throw 'old scool non-error'
+} catch (e: unknown) {
+  Exception.cast(e)
+    .debug({ verbose: true }) // inspect
+    .throw() // rethrow as Exception instance
+}
+```
+
+The debug output will look someting like the following:
+
+```js
+{
+  name: "CatcherInTheRye",
+  message: "[snippets] CatcherInTheRye: old scool non-error (main.test.ts)",
+  stackInfo: {
+    filePath: "/Users/asleepace/dev/@asleepace/errors/tests/main.test.ts",
+    fileName: "main.test.ts",
+    lineNumbers: [ 49, 20 ],
+  },
+  timestamp: "11/3/25, 4:10:22 AM UTC",
+}
+```
+
+As you can see the message also contains a more detailed view of what happened,
+which can be customized via a template as well. (check source code)
+
+More docs coming soon, but time for sleep...
+
+## Contributing
+
+https://github.com/asleepace/exception
